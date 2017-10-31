@@ -15,21 +15,18 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 
 public class MainActivity extends Activity {
 
-    private static final String IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 9_1 like Mac OS X) AppleWebKit/601.1.46 (KHTML, like Gecko) Version/9.0 Mobile/13B143 Safari/601.1";
 
     private View rootLayout;
     private XWalkView mainWebView1;
-    private XWalkView mainWebView2;
-    private XWalkView mainWebView3;
-    private XWalkView mainWebView4;
 
     private CoreHttpServer coreHttpServer;
-    private ConcurrentLinkedQueue<String> taskNoQueueList;
-    private ConcurrentHashMap<String, Map<String, String>> taskDetailHashMap;
+    private LinkedBlockingQueue<String> taskNoQueue = new LinkedBlockingQueue<String>();
+    private ConcurrentHashMap<String, Map<String, String>> taskDetailHashMap = new ConcurrentHashMap<String, Map<String, String>>();
 
 
     @Override
@@ -44,23 +41,17 @@ public class MainActivity extends Activity {
     private void initView() {
         rootLayout = findViewById(R.id.rootLayout);
         mainWebView1 = (XWalkView) findViewById(R.id.mainWebView1);
-        mainWebView2 = (XWalkView) findViewById(R.id.mainWebView2);
-        mainWebView3 = (XWalkView) findViewById(R.id.mainWebView3);
-        mainWebView4 = (XWalkView) findViewById(R.id.mainWebView4);
 
 
     }
 
     private void mainInit() {
-        coreHttpServer = new CoreHttpServer("0.0.0.0", 8080);
+        coreHttpServer = new CoreHttpServer("0.0.0.0", 8080, taskNoQueue, taskDetailHashMap);
         try {
             coreHttpServer.start();
         } catch (IOException e) {
             e.printStackTrace();
         }
-        taskNoQueueList = coreHttpServer.getTaskNoQueueList();
-        taskDetailHashMap = coreHttpServer.getTaskDetailHashMap();
-
 
     }
 

@@ -1503,7 +1503,7 @@ public abstract class NanoHTTPD {
         /**
          * Creates a fixed length response if totalBytes>=0, otherwise chunked.
          */
-        protected Response(IStatus status, String mimeType, InputStream data, long totalBytes) {
+        public Response(IStatus status, String mimeType, InputStream data, long totalBytes) {
             this.status = status;
             this.mimeType = mimeType;
             if (data == null) {
