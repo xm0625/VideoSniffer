@@ -9,8 +9,10 @@ import android.widget.Toast;
 import com.alibaba.fastjson.JSONArray;
 import com.xm.videosniffer.entity.DetectedVideoInfo;
 import com.xm.videosniffer.entity.VideoInfo;
+import com.xm.videosniffer.event.AutoPlayVideoEvent;
 import com.xm.videosniffer.event.LoadEmptyPageEvent;
 import com.xm.videosniffer.event.LoadTargetUrlPageEvent;
+import com.xm.videosniffer.util.UUIDUtil;
 import com.xm.videosniffer.util.VideoFormatUtil;
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
@@ -36,7 +38,7 @@ public class WebWorker {
 
     private WeakReference<XWalkView> weakReferenceXWalkView;
     private LinkedBlockingQueue<String> taskNoQueue;
-    private ConcurrentHashMap<String, Map<String, String>> taskDetailHashMap;
+    private ConcurrentHashMap<String, Map<String, Object>> taskDetailHashMap;
 
     private LinkedBlockingQueue<DetectedVideoInfo> detectedTaskUrlQueue = new LinkedBlockingQueue<DetectedVideoInfo>();
     private SortedMap<String, VideoInfo> foundVideoInfoMap = Collections.synchronizedSortedMap(new TreeMap<String, VideoInfo>());
@@ -45,12 +47,14 @@ public class WebWorker {
     private VideoSniffer videoSniffer;
 
     private WorkThread workThread;
+    private String workerNo;
 
-    public WebWorker(XWalkView xWalkView, LinkedBlockingQueue<String> taskNoQueue, ConcurrentHashMap<String, Map<String, String>> taskDetailHashMap) {
+    public WebWorker(XWalkView xWalkView, LinkedBlockingQueue<String> taskNoQueue, ConcurrentHashMap<String, Map<String, Object>> taskDetailHashMap) {
         this.weakReferenceXWalkView = new WeakReference<XWalkView>(xWalkView);
         this.taskNoQueue = taskNoQueue;
         this.taskDetailHashMap = taskDetailHashMap;
 
+        workerNo = UUIDUtil.genUUID();
         videoSniffer = new VideoSniffer(detectedTaskUrlQueue, foundVideoInfoMap, 5, 3);
         initWebView();
     }
@@ -84,17 +88,19 @@ public class WebWorker {
                 try {
                     String taskNo = taskNoQueue.take();
                     Log.d("WorkerThread", "start taskNo=" + taskNo);
-                    Map<String, String> taskInfo = taskDetailHashMap.get(taskNo);
+                    Map<String, Object> taskInfo = taskDetailHashMap.get(taskNo);
                     if(taskInfo == null){
                         continue;
                     }
                     //记录开始时间
                     long lastOperationStartTime = System.currentTimeMillis();
-                    String originalUrl = taskInfo.get("originalUrl");
+                    String originalUrl = taskInfo.get("originalUrl").toString();
                     taskInfo.put("status", "loading");
-                    EventBus.getDefault().post(new LoadTargetUrlPageEvent(originalUrl));
+                    EventBus.getDefault().post(new LoadTargetUrlPageEvent(workerNo, originalUrl));
                     while((System.currentTimeMillis()- lastOperationStartTime)<TASK_TIMEOUT){
-                        taskInfo.put("resultList", JSONArray.toJSONString(foundVideoInfoMap.values()));
+                        EventBus.getDefault().post(new AutoPlayVideoEvent(workerNo));
+                        taskInfo.put("title", currentTitle);
+                        taskInfo.put("resultList", JSONArray.parse(JSONArray.toJSONString(foundVideoInfoMap.values())));
                         Thread.sleep(500);
                     }
                     taskInfo.put("status", "done");
@@ -110,7 +116,7 @@ public class WebWorker {
 
 
     private void clearCurrentEnv() throws InterruptedException {
-        EventBus.getDefault().post(new LoadEmptyPageEvent());
+        EventBus.getDefault().post(new LoadEmptyPageEvent(workerNo));
         Thread.sleep(500);
         detectedTaskUrlQueue.clear();
         foundVideoInfoMap.clear();
@@ -120,6 +126,9 @@ public class WebWorker {
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onLoadEmptyPageEvent(LoadEmptyPageEvent loadEmptyPageEvent){
+        if(!workerNo.equals(loadEmptyPageEvent.getWorkerNo())){
+            return;
+        }
         XWalkView xWalkView = weakReferenceXWalkView.get();
         if(xWalkView==null){
             return;
@@ -130,11 +139,48 @@ public class WebWorker {
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onLoadTargetUrlPageEvent(LoadTargetUrlPageEvent loadTargetUrlPageEvent){
+        if(!workerNo.equals(loadTargetUrlPageEvent.getWorkerNo())){
+            return;
+        }
         XWalkView xWalkView = weakReferenceXWalkView.get();
         if(xWalkView==null){
             return;
         }
         xWalkView.loadUrl(loadTargetUrlPageEvent.getUrl());
+    }
+
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onAutoPlayVideoEvent(AutoPlayVideoEvent autoPlayVideoEvent){
+        if(!workerNo.equals(autoPlayVideoEvent.getWorkerNo())){
+            return;
+        }
+        XWalkView xWalkView = weakReferenceXWalkView.get();
+        if(xWalkView==null){
+            return;
+        }
+        //youku
+        xWalkView.loadUrl("javascript: $('.x-video-button').click();");
+        //souhu 56
+        xWalkView.loadUrl("javascript: $('.x-cover-playbtn').click();");
+        //newtudou
+        xWalkView.loadUrl("javascript: $('.td-h5__player__button').click();");
+        //letv
+        xWalkView.loadUrl("javascript: $('.hv_ico_pasued').click();");
+        //youtube
+        xWalkView.loadUrl("javascript: $('button[aria-label=\"播放\"]').click();");
+        //pptv
+        xWalkView.loadUrl("javascript: var ppifram_page = $('iframe#ifr_player').attr('src');if(ppifram_page!=null && ppifram_page.length>0){location.href = ppifram_page};");
+        xWalkView.loadUrl("javascript: $('.p-video-button').click();");
+        //爆米花网
+        xWalkView.loadUrl("javascript: var dispatch = function(c, b){try {var a = document.createEvent(\"Event\");a.initEvent(b, true, true);c.dispatchEvent(a)}catch (d) {console.log(0);}};dispatch($('.player-play')[0], \"click\");");
+        //1905
+        xWalkView.loadUrl("javascript: var dispatch = function(c, b){try {var a = document.createEvent(\"Event\");a.initEvent(b, true, true);c.dispatchEvent(a)}catch (d) {console.log(0);}};dispatch($('.v-cover')[0], \"click\");");
+        xWalkView.loadUrl("javascript: var dispatch = function(c, b){try {var a = document.createEvent(\"Event\");a.initEvent(b, true, true);c.dispatchEvent(a)}catch (d) {console.log(0);}};dispatch($('#playerbtn')[0], \"click\");");
+        //神马
+        xWalkView.loadUrl("javascript: var frame_page = $('iframe#videoPlayer').attr('src');if(frame_page!=null && frame_page.length>0){location.href = frame_page};");
+        //normal h5 video (v.qq)
+        xWalkView.loadUrl("javascript: var audios = document.getElementsByTagName('audio');for(var i=0;i<audios.length;i++){audios[i].play();};var videos = document.getElementsByTagName('video');for(var i=0;i<videos.length;i++){videos[i].play();};");
     }
 
     private void initWebView() {
@@ -153,6 +199,7 @@ public class WebWorker {
         webSettings.setJavaScriptEnabled(true);
         webSettings.setUserAgentString(IPHONE_UA);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
+        webSettings.setMediaPlaybackRequiresUserGesture(false);
 
         xWalkView.requestFocus();
 

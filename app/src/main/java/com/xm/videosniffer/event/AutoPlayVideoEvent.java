@@ -1,15 +1,12 @@
 package com.xm.videosniffer.event;
 
-import com.xm.videosniffer.WebWorker;
-
 /**
- * Created by xm on 17-10-31.
+ * Created by xm on 17-11-1.
  */
-public class LoadEmptyPageEvent {
-
+public class AutoPlayVideoEvent {
     private String workerNo;
 
-    public LoadEmptyPageEvent(String workerNo) {
+    public AutoPlayVideoEvent(String workerNo) {
         this.workerNo = workerNo;
     }
 
